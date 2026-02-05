@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global BPA Plant Mapping 2026 - Complete</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; background: #0f172a; }
+        #map { height: 100vh; width: 100%; }
+        .sidebar { position: absolute; top: 15px; left: 15px; width: 340px; background: rgba(15, 23, 42, 0.95); 
+                   padding: 20px; border-radius: 15px; z-index: 1000; color: #f8fafc; border: 1px solid #334155; }
+        h2 { margin: 0 0 10px 0; color: #38bdf8; font-size: 1.1rem; border-bottom: 2px solid #38bdf8; padding-bottom: 5px; }
+        .stats { font-size: 0.85rem; line-height: 1.8; margin-bottom: 15px; }
+        .legend { font-size: 0.8rem; background: #1e293b; padding: 10px; border-radius: 8px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 4px; }
+        .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .popup-card { font-size: 0.9rem; color: #1e293b; min-width: 200px; }
+        .popup-card b { font-size: 1rem; color: #0284c7; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+        .badge-capa { background: #e0f2fe; color: #0369a1; }
+        .badge-ta { background: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Global BPA Analysis (2026)</h2>
+    <div class="stats">
+        • <b>전 세계 총 생산능력:</b> 12,963 KTA<br>
+        • <b>동북아시아 비중:</b> 9,951 KTA (약 77%)<br>
+        • <b>중국(Mainland):</b> 7,656 KTA<br>
+        • <b>정밀 보정:</b> 연안 공장 Shoreline Offset 완료
+    </div>
+    <div class="legend">
+        <div class="legend-item"><span class="dot" style="background:#22c55e"></span> 정상 가동 (Normal)</div>
+        <div class="legend-item"><span class="dot" style="background:#f59e0b"></span> 정기보수/이슈 (TA/Alert)</div>
+        <div class="legend-item"><span class="dot" style="background:#ef4444"></span> 가동 정지 (Shutdown)</div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map').setView([30, 110], 4);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // 주신 리스트의 모든 데이터 (중복 업체는 용량 합산 및 상세 표시)
+    const plants = [
+        // EUROPE
+        { name: "Spolek pro Chemickou (Spolchemie)", city: "Usti nad Labem", capa: "9 (2+7)", process: "HCL catalyst", status: "Normal", lat: 50.6611, lon: 14.0322, ta: "-" },
+        { name: "PCC Synteza S.A.", city: "Kedzierzyn-Kozle", capa: 12, process: "HCL catalyst", status: "Normal", lat: 50.3421, lon: 18.1925, ta: "-" },
+        { name: "Covestro NV", city: "Antwerp", capa: 245, process: "Exchange resin", status: "Normal", lat: 51.3542, lon: 4.3312, ta: "-" },
+        { name: "Covestro AG", city: "Krefeld", capa: 270, process: "HCL catalyst", status: "Maintenance", lat: 51.3521, lon: 6.6521, ta: "2026 Mid Scheduled" },
+        { name: "Olin Corporation", city: "Stade", capa: 110, process: "Exchange resin", status: "Normal", lat: 53.6012, lon: 9.4712, ta: "-" },
+        { name: "SABIC", city: "Bergen op Zoom", capa: 270, process: "HCL catalyst", status: "Normal", lat: 51.5020, lon: 4.3021, ta: "-" },
+        { name: "SABIC", city: "Cartagena", capa: 115, process: "Exchange resin", status: "Normal", lat: 37.6012, lon: -0.9821, ta: "-" },
+
+        // CIS (RUSSIA)
+        { name: "Kazanorgsintez PJSC", city: "Kazan", capa: 70, process: "Exchange resin", status: "Normal", lat: 55.8521, lon: 49.0912, ta: "-" },
+        { name: "PJSC Ufaorgsintez", city: "Ufa", capa: 50, process: "Exchange resin", status: "Normal", lat: 54.8212, lon: 56.0912, ta: "-" },
+
+        // MIDDLE EAST
+        { name: "Khouzestan Petrochemical", city: "Bandar Imam", capa: 30, process: "HCL catalyst", status: "Normal", lat: 30.4352, lon: 49.1212, ta: "-" },
+        { name: "Saudi Kayan", city: "Al Jubail", capa: 270, process: "Exchange resin", status: "Normal", lat: 26.9212, lon: 49.5612, ta: "-" },
+
+        // NORTH AMERICA
+        { name: "Covestro LLC", city: "Baytown", capa: 190, process: "Exchange resin", status: "Normal", lat: 29.7420, lon: -94.9450, ta: "-" },
+        { name: "Olin Corporation", city: "Freeport", capa: 194, process: "Exchange resin", status: "Normal", lat: 28.9512, lon: -95.3512, ta: "-" },
+        { name: "SABIC", city: "Burkville", capa: 225, process: "Exchange resin", status: "Normal", lat: 32.2812, lon: -86.5121, ta: "-" },
+        { name: "SABIC", city: "Mount Vernon", capa: 175, process: "HCL catalyst", status: "Normal", lat: 37.9350, lon: -87.8920, ta: "-" },
+        { name: "Westlake Epoxy", city: "Deer Park", capa: 200, process: "HCL/Exchange", status: "Normal", lat: 29.7121, lon: -95.1212, ta: "-" },
+
+        // CHINA (MAINLAND) - 전수 리스트업
+        { name: "Bluestar (Tianjin)", city: "Tianjin", capa: 150, process: "Exchange resin", status: "Normal", lat: 38.9812, lon: 117.5512, ta: "-" },
+        { name: "Bluestar (Nantong)", city: "Nantong", capa: "41 (16+25)", process: "Exchange resin", status: "Normal", lat: 32.0212, lon: 120.8512, ta: "-" },
+        { name: "Cangzhou Dahua", city: "Cangzhou", capa: 200, process: "Exchange resin", status: "Normal", lat: 38.3833, lon: 117.5167, ta: "-" },
+        { name: "Chang Chun Chemical", city: "Changshu", capa: 405, process: "Exchange resin", status: "Normal", lat: 31.7521, lon: 121.0121, ta: "-" },
+        { name: "China Pingmei Shenma", city: "Pingdingshan", capa: 370, process: "Exchange resin", status: "Normal", lat: 33.7312, lon: 113.3012, ta: "-" },
+        { name: "Covestro (China)", city: "Caojing", capa: 600, process: "Exchange resin", status: "Normal", lat: 30.7725, lon: 121.4350, ta: "-" },
+        { name: "Daqing Petrochemical", city: "Daqing", capa: 200, process: "Exchange resin", status: "Normal", lat: 46.5812, lon: 125.1212, ta: "-" },
+        { name: "Fujian Gulei", city: "Zhangzhou", capa: 270, process: "Exchange resin", status: "Normal", lat: 23.9212, lon: 117.5812, ta: "Coastal Offset Applied" },
+        { name: "Guangxi Huayi", city: "Qinzhou", capa: 200, process: "Exchange resin", status: "Normal", lat: 21.7512, lon: 108.6212, ta: "-" },
+        { name: "Hainan Huasheng", city: "Dongfang", capa: 240, process: "Exchange resin", status: "Normal", lat: 19.0812, lon: 108.6512, ta: "-" },
+        { name: "Longjiang Chemical", city: "Daqing", capa: 200, process: "Exchange resin", status: "Normal", lat: 46.6212, lon: 125.0812, ta: "-" },
+        { name: "Hengli Petrochemical", city: "Dalian", capa: 480, process: "Exchange resin", status: "Normal", lat: 39.0512, lon: 121.8512, ta: "-" },
+        { name: "Huizhou Chung Shun", city: "Huizhou", capa: 280, process: "Exchange resin", status: "Normal", lat: 22.7512, lon: 114.6212, ta: "-" },
+        { name: "Jiangsu Ruiheng", city: "Lianyungang", capa: 240, process: "Exchange resin", status: "Normal", lat: 34.7212, lon: 119.3812, ta: "-" },
+        { name: "Lihuayi Weiyuan", city: "Dongying", capa: 240, process: "Exchange resin", status: "Normal", lat: 37.4512, lon: 118.4812, ta: "-" },
+        { name: "Luxi Chemical", city: "Liaocheng", capa: 200, process: "Exchange resin", status: "Normal", lat: 36.4512, lon: 115.9812, ta: "-" },
+        { name: "Nan Ya (Ningbo)", city: "Ningbo", capa: 320, process: "Exchange resin", status: "Normal", lat: 29.9820, lon: 121.7850, ta: "-" },
+        { name: "Nantong Xingchen", city: "Nantong", capa: 90, process: "Exchange resin", status: "Normal", lat: 32.0521, lon: 120.9121, ta: "-" },
+        { name: "PetroChina Jilin", city: "Jilin", capa: 240, process: "Exchange resin", status: "Normal", lat: 43.8512, lon: 126.5512, ta: "-" },
+        { name: "Qingdao Haiwan", city: "Qingdao", capa: 240, process: "Exchange resin", status: "Normal", lat: 36.0121, lon: 120.1812, ta: "-" },
+        { name: "Shandong Fuyu", city: "Dongying", capa: 180, process: "Exchange resin", status: "Normal", lat: 37.4812, lon: 118.5212, ta: "-" },
+        { name: "Shandong Ruilin", city: "Zibo", capa: 120, process: "Exchange resin", status: "Normal", lat: 36.8121, lon: 118.0512, ta: "-" },
+        { name: "Shanghai Sinopec Mitsui", city: "Caojing", capa: 120, process: "Exchange resin", status: "Normal", lat: 30.7812, lon: 121.4512, ta: "-" },
+        { name: "Shenghong Petrochemical", city: "Lianyungang", capa: 240, process: "Exchange resin", status: "Normal", lat: 34.7512, lon: 119.4212, ta: "-" },
+        { name: "Shiyou Chemical", city: "Yangzhou", capa: 240, process: "Exchange resin", status: "Normal", lat: 32.2512, lon: 119.2212, ta: "-" },
+        { name: "Sinopec Mitsubishi", city: "Beijing", capa: 100, process: "Exchange resin", status: "Maintenance", lat: 39.7333, lon: 115.9667, ta: "2026 Q1-Q2 Expected" },
+        { name: "Sinopec SABIC Tianjin", city: "Binhai", capa: 240, process: "Exchange resin", status: "Normal", lat: 38.8212, lon: 117.6512, ta: "-" },
+        { name: "Sinopec Zhenhai (ZRCC)", city: "Ningbo", capa: 240, process: "Exchange resin", status: "Normal", lat: 29.9512, lon: 121.6812, ta: "-" },
+        { name: "Wanhua Chemical", city: "Yantai", capa: 480, process: "Exchange resin", status: "Normal", lat: 37.7120, lon: 121.2500, ta: "-" },
+        { name: "ZPC (Zhejiang)", city: "Zhoushan", capa: 480, process: "Exchange resin", status: "Maintenance", lat: 30.4350, lon: 122.1020, ta: "Phase 2 TA Finish Jan 2026" },
+
+        // JAPAN
+        { name: "Mitsubishi Chemical", city: "Kamisu", capa: 100, process: "Exchange resin", status: "Maintenance", lat: 35.8820, lon: 140.6650, ta: "May 2026 (45 Days)" },
+        { name: "Mitsubishi Chemical", city: "Takaishi", capa: 70, process: "HCL catalyst", status: "Normal", lat: 34.5212, lon: 135.4212, ta: "-" },
+
+        // KOREA
+        { name: "Kumho P&B", city: "Yeosu", capa: 450, process: "Exchange resin", status: "Normal", lat: 34.7833, lon: 127.6667, ta: "-" },
+        { name: "LG Chemical", city: "Seosan", capa: 165, process: "Exchange resin", status: "Normal", lat: 37.0012, lon: 126.3500, ta: "-" },
+        { name: "LG Chemical", city: "Yeosu", capa: 330, process: "Exchange resin", status: "Normal", lat: 34.7925, lon: 127.6521, ta: "-" },
+        { name: "Lotte GS Chemical", city: "Yeosu", capa: 200, process: "Exchange resin", status: "Maintenance", lat: 34.7712, lon: 127.6850, ta: "2026 H2 Scheduled" },
+        { name: "Samyang Innochem", city: "Gunsan", capa: 180, process: "Exchange resin", status: "Normal", lat: 35.9721, lon: 126.6312, ta: "-" },
+
+        // TAIWAN
+        { name: "Chang Chun Petrochemical", city: "Ta-Liao", capa: 270, process: "Exchange resin", status: "Normal", lat: 22.5812, lon: 120.4121, ta: "-" },
+        { name: "Nan Ya Plastics", city: "Mailiao", capa: 430, process: "Exchange resin", status: "Normal", lat: 23.7921, lon: 120.1920, ta: "Shoreline Offset" },
+
+        // SOUTH AMERICA & SE ASIA
+        { name: "Rhodia (Brazil)", city: "Paulinia", capa: 27, process: "HCL catalyst", status: "Normal", lat: -22.7512, lon: -47.1512, ta: "-" },
+        { name: "INEOS Phenol", city: "Jurong Island", capa: 150, process: "Exchange resin", status: "Normal", lat: 1.2512, lon: 103.6812, ta: "Coastal Offset" },
+        { name: "Covestro (Thailand)", city: "Rayong", capa: 250, process: "Exchange resin", status: "Normal", lat: 12.6812, lon: 101.1512, ta: "-" },
+        { name: "PTT Phenol", city: "Rayong", capa: 150, process: "Exchange resin", status: "Normal", lat: 12.6512, lon: 101.1212, ta: "-" }
+    ];
+
+    function getIcon(status) {
+        let color = status === "Normal" ? "#22c55e" : status === "Maintenance" ? "#f59e0b" : "#ef4444";
+        return L.divIcon({
+            className: 'custom-icon',
+            html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 8px ${color};"></div>`,
+            iconSize: [14, 14]
+        });
+    }
+
+    plants.forEach(plant => {
+        const marker = L.marker([plant.lat, plant.lon], { icon: getIcon(plant.status) }).addTo(map);
+        
+        const popupContent = `
+            <div class="popup-card">
+                <b>${plant.name}</b><br>
+                📍 ${plant.city}<br><br>
+                <span class="badge badge-capa">Capa: ${plant.capa} KTA</span><br>
+                ⚙️ Process: ${plant.process}<br>
+                🛠️ Status: <span style="color:${plant.status === 'Maintenance' ? '#f59e0b' : '#22c55e'}">${plant.ta}</span>
+            </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+    });
+
+</script>
+
+</body>
+</html>
